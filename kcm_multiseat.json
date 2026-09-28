@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Name": "Multiseat",
+        "Description": "Monitor and manage multiseat workstations",
+        "Icon": "preferences-desktop-display",
+        "Category": "Hardware",
+        "Authors": [
+            {
+                "Name": "Antigravity Pair",
+                "Email": "antigravity@local"
+            }
+        ]
+    },
+    "X-KDE-System-Settings-Parent-Category": "hardware",
+    "X-KDE-Weight": 70
+}

@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.20)
+project(kcm_multiseat VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(ECM 6.0.0 REQUIRED NO_MODULE)
+set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
+
+include(KDEInstallDirs)
+include(KDECMakeSettings)
+include(KDECompilerSettings NO_POLICY_SCOPE)
+
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick DBus)
+find_package(KF6 REQUIRED COMPONENTS CoreAddons KCMUtils I18n)
+
+kcmutils_add_qml_kcm(kcm_multiseat
+    SOURCES
+        src/multiseat.cpp
+        src/multiseat.h
+)
+
+target_link_libraries(kcm_multiseat PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
+    Qt6::DBus
+    KF6::CoreAddons
+    KF6::KCMUtils
+    KF6::KCMUtilsQuick
+    KF6::I18n
+)
