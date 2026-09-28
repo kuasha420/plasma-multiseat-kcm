@@ -35,7 +35,7 @@ Kirigami.ScrollablePage {
                 spacing: Kirigami.Units.largeSpacing
 
                 Kirigami.Icon {
-                    source: "preferences-desktop-display"
+                    source: "computer"
                     implicitWidth: Kirigami.Units.iconSizes.huge
                     implicitHeight: Kirigami.Units.iconSizes.huge
                     Layout.alignment: Qt.AlignVCenter

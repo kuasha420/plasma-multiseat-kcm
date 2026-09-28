@@ -2,12 +2,12 @@
     "KPlugin": {
         "Name": "Multiseat",
         "Description": "Monitor and manage multiseat workstations",
-        "Icon": "preferences-desktop-display",
+        "Icon": "computer",
         "Category": "Hardware",
         "Authors": [
             {
-                "Name": "Antigravity Pair",
-                "Email": "antigravity@local"
+                "Name": "Arafat Zahan",
+                "Email": "kuasha420@gmail.com"
             }
         ]
     },
