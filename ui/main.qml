@@ -140,188 +140,190 @@ Kirigami.ScrollablePage {
                     }
                 }
 
-                contentItem: ColumnLayout {
-                    spacing: Kirigami.Units.largeSpacing
+                contentItem: GridLayout {
+                    columns: 2
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
                     Layout.fillWidth: true
 
                     // --- SECTION 1: Display & Graphics ---
-                    ColumnLayout {
+                    RowLayout {
+                        Layout.columnSpan: 2
                         Layout.fillWidth: true
+                        Layout.topMargin: Kirigami.Units.smallSpacing / 2
                         spacing: Kirigami.Units.smallSpacing
 
-                        RowLayout {
-                            spacing: Kirigami.Units.smallSpacing
-                            Kirigami.Icon {
-                                source: "video-display"
-                                implicitWidth: Kirigami.Units.iconSizes.smallMedium
-                                implicitHeight: Kirigami.Units.iconSizes.smallMedium
-                            }
-                            Kirigami.Heading {
-                                text: i18n("Display & Graphics Engine")
-                                level: 4
-                            }
+                        Kirigami.Icon {
+                            source: "video-display"
+                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                            implicitHeight: Kirigami.Units.iconSizes.smallMedium
                         }
-
-                        Kirigami.Separator {
+                        Kirigami.Heading {
+                            text: i18n("Display & Graphics Engine")
+                            level: 4
                             Layout.fillWidth: true
                         }
+                    }
 
-                        GridLayout {
-                            columns: 2
-                            columnSpacing: Kirigami.Units.largeSpacing
-                            rowSpacing: Kirigami.Units.smallSpacing
-                            Layout.fillWidth: true
+                    Kirigami.Separator {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing / 2
+                    }
 
-                            // GPU Model
-                            QQC2.Label {
-                                text: i18n("GPU Model:")
-                                font.bold: true
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                horizontalAlignment: Text.AlignRight
-                            }
-                            QQC2.Label {
-                                text: modelData.gpuName
-                                font.bold: true
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
+                    // GPU Model
+                    QQC2.Label {
+                        text: i18n("GPU Model:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignTop
+                    }
+                    QQC2.Label {
+                        text: modelData.gpuName
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
 
-                            // Driver & Node
-                            QQC2.Label {
-                                text: i18n("Kernel Driver:")
-                                font.bold: true
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                horizontalAlignment: Text.AlignRight
-                            }
-                            QQC2.Label {
-                                text: modelData.driver + " • " + modelData.drmCard + (modelData.pciAddr ? " @ " + modelData.pciAddr : "")
-                                font.family: "monospace"
-                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.fillWidth: true
-                            }
+                    // Driver & Node
+                    QQC2.Label {
+                        text: i18n("Kernel Driver:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignTop
+                    }
+                    QQC2.Label {
+                        text: modelData.driver + " • " + modelData.drmCard + (modelData.pciAddr ? " @ " + modelData.pciAddr : "")
+                        font.family: "monospace"
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.fillWidth: true
+                    }
 
-                            // Displays
-                            QQC2.Label {
-                                text: i18n("Active Displays:")
-                                font.bold: true
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                horizontalAlignment: Text.AlignRight
-                                Layout.alignment: Qt.AlignTop
-                            }
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 4
+                    // Displays
+                    QQC2.Label {
+                        text: i18n("Active Displays:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignTop
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
 
-                                Repeater {
-                                    model: modelData.displays
-                                    delegate: RowLayout {
-                                        spacing: Kirigami.Units.smallSpacing
-                                        Kirigami.Icon {
-                                            source: "video-television"
-                                            implicitWidth: Kirigami.Units.iconSizes.small
-                                            implicitHeight: Kirigami.Units.iconSizes.small
-                                        }
-                                        QQC2.Label {
-                                            text: modelData.port + " • " + modelData.monitor + " (" + modelData.mode + ")"
-                                            font.bold: true
-                                        }
-                                    }
+                        Repeater {
+                            model: modelData.displays
+                            delegate: RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+                                Kirigami.Icon {
+                                    source: "video-television"
+                                    implicitWidth: Kirigami.Units.iconSizes.small
+                                    implicitHeight: Kirigami.Units.iconSizes.small
+                                }
+                                QQC2.Label {
+                                    text: modelData.port + " • " + modelData.monitor + " (" + modelData.mode + ")"
+                                    font.bold: true
                                 }
                             }
                         }
                     }
 
                     // --- SECTION 2: USB Hardware & Audio ---
-                    ColumnLayout {
+                    RowLayout {
+                        Layout.columnSpan: 2
                         Layout.fillWidth: true
+                        Layout.topMargin: Kirigami.Units.largeSpacing
                         spacing: Kirigami.Units.smallSpacing
 
-                        RowLayout {
-                            spacing: Kirigami.Units.smallSpacing
-                            Kirigami.Icon {
-                                source: "input-mouse"
-                                implicitWidth: Kirigami.Units.iconSizes.smallMedium
-                                implicitHeight: Kirigami.Units.iconSizes.smallMedium
-                            }
-                            Kirigami.Heading {
-                                text: i18n("USB Hardware & Audio")
-                                level: 4
-                            }
+                        Kirigami.Icon {
+                            source: "input-mouse"
+                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                            implicitHeight: Kirigami.Units.iconSizes.smallMedium
                         }
-
-                        Kirigami.Separator {
+                        Kirigami.Heading {
+                            text: i18n("USB Hardware & Audio")
+                            level: 4
                             Layout.fillWidth: true
                         }
+                    }
 
-                        GridLayout {
-                            columns: 2
-                            columnSpacing: Kirigami.Units.largeSpacing
-                            rowSpacing: Kirigami.Units.smallSpacing
-                            Layout.fillWidth: true
+                    Kirigami.Separator {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing / 2
+                    }
 
-                            // USB Ports
-                            QQC2.Label {
-                                text: i18n("USB Ports:")
-                                font.bold: true
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                horizontalAlignment: Text.AlignRight
-                            }
-                            QQC2.Label {
-                                text: modelData.usbTopology
-                                font.bold: true
-                                color: Kirigami.Theme.highlightColor
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
+                    // USB Ports
+                    QQC2.Label {
+                        text: i18n("USB Ports:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignTop
+                    }
+                    QQC2.Label {
+                        text: modelData.usbTopology
+                        font.bold: true
+                        color: Kirigami.Theme.highlightColor
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
 
-                            // Input Devices
-                            QQC2.Label {
-                                text: i18n("Input Devices:")
-                                font.bold: true
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                horizontalAlignment: Text.AlignRight
-                                Layout.alignment: Qt.AlignTop
-                            }
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 4
+                    // Input Devices
+                    QQC2.Label {
+                        text: i18n("Input Devices:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignTop
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
 
-                                Repeater {
-                                    model: modelData.inputDevices
-                                    delegate: RowLayout {
-                                        spacing: Kirigami.Units.smallSpacing
-                                        Kirigami.Icon {
-                                            source: modelData.indexOf("Keyboard") !== -1 ? "input-keyboard" : (modelData.indexOf("Mouse") !== -1 ? "input-mouse" : "input-gaming")
-                                            implicitWidth: Kirigami.Units.iconSizes.small
-                                            implicitHeight: Kirigami.Units.iconSizes.small
-                                        }
-                                        QQC2.Label {
-                                            text: modelData
-                                        }
-                                    }
+                        Repeater {
+                            model: modelData.inputDevices
+                            delegate: RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+                                Kirigami.Icon {
+                                    source: modelData.indexOf("Keyboard") !== -1 ? "input-keyboard" : (modelData.indexOf("Mouse") !== -1 ? "input-mouse" : "input-gaming")
+                                    implicitWidth: Kirigami.Units.iconSizes.small
+                                    implicitHeight: Kirigami.Units.iconSizes.small
+                                }
+                                QQC2.Label {
+                                    text: modelData
                                 }
                             }
-
-                            // Audio Output
-                            QQC2.Label {
-                                text: i18n("Audio Output:")
-                                font.bold: true
-                                color: Kirigami.Theme.disabledTextColor
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                horizontalAlignment: Text.AlignRight
-                            }
-                            QQC2.Label {
-                                text: modelData.audioSink
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
                         }
+                    }
+
+                    // Audio Output
+                    QQC2.Label {
+                        text: i18n("Audio Output:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignTop
+                    }
+                    QQC2.Label {
+                        text: modelData.audioSink
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
                     }
                 }
             }

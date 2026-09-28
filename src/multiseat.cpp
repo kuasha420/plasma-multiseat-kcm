@@ -226,7 +226,7 @@ void KCMultiseat::collectSeatData()
 
         if (!drmCard.isEmpty()) {
             QString deviceLink = QStringLiteral("/sys/class/drm/%1/device").arg(drmCard);
-            QString targetPath = QFile::symLinkTarget(deviceLink);
+            QString targetPath = QFileInfo(deviceLink).canonicalFilePath();
             if (!targetPath.isEmpty()) {
                 pciAddr = QFileInfo(targetPath).fileName();
                 if (pciAddr.startsWith(QStringLiteral("0000:"))) {
@@ -238,13 +238,12 @@ void KCMultiseat::collectSeatData()
                 if (!desc.isEmpty()) {
                     gpuName = desc;
                 }
+            }
 
-                // Read driver name
-                QString driverLink = targetPath + QStringLiteral("/driver");
-                QString driverTarget = QFile::symLinkTarget(driverLink);
-                if (!driverTarget.isEmpty()) {
-                    driverName = QFileInfo(driverTarget).fileName();
-                }
+            // Read driver name
+            QString driverTarget = QFileInfo(QStringLiteral("/sys/class/drm/%1/device/driver").arg(drmCard)).canonicalFilePath();
+            if (!driverTarget.isEmpty()) {
+                driverName = QFileInfo(driverTarget).fileName();
             }
         }
 
@@ -260,7 +259,7 @@ void KCMultiseat::collectSeatData()
         // Dynamic USB Topology discovery
         QString usbTopologyDesc;
         if (seatName == QStringLiteral("seat0")) {
-            usbTopologyDesc = QStringLiteral("Direct Host Controllers (CPU-direct xHCI)");
+            usbTopologyDesc = QStringLiteral("Direct Host Controllers (Root xHCI)");
         } else {
             // Check attached USB devices/hubs in seat-status
             QRegularExpression usbHubRegex(QString::fromUtf8(R"(/usb(\d+)/(\d+-\d+))"));
