@@ -91,7 +91,7 @@ To view its live operation:
 journalctl -u multiseat-supervisor.service -f
 ```
 
-For the full architectural analysis and our draft upstream bug report for KDE developers, see [`docs/upstream-issue-draft.md`](docs/upstream-issue-draft.md).
+For the full architectural analysis and our draft upstream bug report for KDE developers, see [`docs/upstream-issue.md`](docs/upstream-issue.md).
 
 ---
 

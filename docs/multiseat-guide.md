@@ -130,7 +130,7 @@ Run the included installer script:
 ```
 This installs `/usr/local/bin/multiseat-supervisor` and enables `/etc/systemd/system/multiseat-supervisor.service`.
 
-For full details on the upstream architecture and proposed fixes, see [Upstream Issue Draft](upstream-issue-draft.md).
+For full details on the upstream architecture and proposed fixes, see [Upstream Issue Draft](upstream-issue.md).
 
 ---
 

@@ -1,16 +1,7 @@
-# Upstream Issue Draft: KDE Plasma Login Manager
-
-**Target Repository**: [invent.kde.org/plasma/plasma-login-manager](https://invent.kde.org/plasma/plasma-login-manager/-/issues)  
-**Issue Title Options**:
-* **Option 1 (Recommended)**: `Multiseat: Concurrent Wayland greeters collide under singleton plasmalogin systemd --user session`
-* **Option 2 (Symptom-focused)**: `Multiseat: Secondary seat display remains blank at boot due to plasmalogin systemd --user collision`
-
----
-
-## Issue Description
+# Multiseat: Concurrent Wayland greeters collide under singleton plasmalogin systemd --user session
 
 ### Summary
-In a multiseat environment managed by `systemd-logind` (e.g. `seat0` and `seat1` with dedicated DRM master GPUs and USB controllers), `plasma-login-manager` attempts to spawn Wayland greeters on each seat concurrently at system startup.
+In a multiseat environment managed by `systemd-logind` (e.g. `seat0` with a dedicated GPU and `seat1` with an integrated GPU), `plasma-login-manager` attempts to spawn Wayland greeters on each seat concurrently at system startup.
 
 Because `plasma-login-manager` runs greeters inside `systemd --user` under a single shared system user (`plasmalogin`, UID 959), only one seat can successfully initialize `plasma-login-kwin_wayland.service` and `plasma-login-wayland.target`. The secondary seat suffers a compositor collision, its helper stalls in a `ppoll` wait state, and its monitor remains completely blank.
 
@@ -43,7 +34,7 @@ Because `plasma-login-manager` runs greeters inside `systemd --user` under a sin
 ### Relevant Journal Logs
 
 At boot, the daemon creates displays on both seats:
-```text
+```
 plasmalogin[13402]: Adding new display... Using VT -1
 plasmalogin[13402]: Adding new display... Using VT 1
 plasmalogin[13402]: Display server started.
@@ -56,7 +47,7 @@ plasmalogin[13402]: Message received from greeter: Connect
 *(Notice that only one `Connect` message is received; the second greeter never establishes a connection).*
 
 When a user logs into the winning seat:
-```text
+```
 plasmalogin[13402]: Session started true
 plasmalogin[13402]: Greeter stopping...
 plasmalogin[13402]: Auth: plasmalogin-helper exited with 255
@@ -88,7 +79,5 @@ We currently work around this by running a background supervisor script that ser
 1. One seat claims the initial greeter at boot while the second waits.
 2. Once the first user logs in, that seat transitions to their own personal session (`user@<uid>.service`), freeing `user@959.service`.
 3. The supervisor detects the active user session, cleans up the stalled session on the waiting seat via `loginctl terminate-session`, and calls:
-   ```bash
-   qdbus6 --system org.freedesktop.DisplayManager /org/freedesktop/DisplayManager/SeatX org.freedesktop.DisplayManager.Seat.SwitchToGreeter
-   ```
+   `qdbus6 --system org.freedesktop.DisplayManager /org/freedesktop/DisplayManager/SeatX org.freedesktop.DisplayManager.Seat.SwitchToGreeter`
 4. The second seat's greeter then initializes cleanly and lights up.
