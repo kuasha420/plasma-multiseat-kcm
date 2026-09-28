@@ -108,8 +108,18 @@ Apply the new rules immediately:
 sudo udevadm trigger
 ```
 
-### Step 4: Display Manager Integration
-Modern display managers like **Plasma Login Manager (`plasma-login-manager`)**, **GDM**, and **SDDM** automatically monitor logind D-Bus signals. The instant `seat1` is created, the display manager spawns a native Wayland login greeter on Monitor 2.
+### Step 4: Display Manager Integration (Plasma Login Manager)
+In KDE Plasma 6, **Plasma Login Manager (`plasma-login-manager`)** launches greeter sessions managed under `systemd --user` for the system user `plasmalogin` (UID 959). 
+
+Because `systemd --user` runs a single user manager per UID, running multiple concurrent greeters under the same UID creates a compositor socket collision at early boot. To serialize and supervise the second station automatically, we install the **Multiseat Seat 1 Supervisor**:
+
+1. Install `/usr/local/bin/multiseat-seat1-supervisor`:
+   Monitors `systemd-logind` and ensures that once Seat 0 is active (or autologged in), any stale early-boot greeter session on Seat 1 is cleaned up and `SwitchToGreeter` is triggered via D-Bus (`org.freedesktop.DisplayManager.Seat.SwitchToGreeter`).
+2. Enable the systemd service:
+   ```bash
+   sudo systemctl enable --now multiseat-seat1-supervisor.service
+   ```
+This provides hands-free startup: Seat 0 initializes immediately at boot, and Seat 1 automatically lights up with the Plasma Login screen as soon as Seat 0 is ready.
 
 ---
 
@@ -125,6 +135,9 @@ loginctl seat-status seat1
 
 # View active user sessions
 loginctl list-sessions
+
+# Check supervisor status
+systemctl status multiseat-seat1-supervisor.service
 ```
 
 ### Emergency Reset / Revert to Single-Seat
@@ -134,3 +147,4 @@ sudo loginctl flush-devices
 sudo udevadm trigger
 ```
 This wipes all custom seat rules and immediately merges all displays and USB ports back to `seat0`.
+
