@@ -111,21 +111,32 @@ sudo udevadm trigger
 ### Step 4: Display Manager Integration (Plasma Login Manager)
 In KDE Plasma 6, **Plasma Login Manager (`plasma-login-manager`)** launches greeter sessions managed under `systemd --user` for the system user `plasmalogin` (UID 959). 
 
-Because `systemd --user` runs a single user manager per UID, running multiple concurrent greeters under the same UID creates a compositor socket collision at early boot. To serialize and supervise the second station automatically, we install the **Multiseat Seat 1 Supervisor**:
+#### The Boot Race Condition
+Because `systemd --user` runs a single user manager per UID, running multiple concurrent greeters under the same UID creates a compositor socket and D-Bus name collision at early boot (`BusName=org.kde.KWin`, `$XDG_RUNTIME_DIR/wayland-0`). 
 
-1. Install `/usr/local/bin/multiseat-seat1-supervisor`:
-   Monitors `systemd-logind` and ensures that once Seat 0 is active (or autologged in), any stale early-boot greeter session on Seat 1 is cleaned up and `SwitchToGreeter` is triggered via D-Bus (`org.freedesktop.DisplayManager.Seat.SwitchToGreeter`).
-2. Enable the systemd service:
-   ```bash
-   sudo systemctl enable --now multiseat-seat1-supervisor.service
-   ```
-This provides hands-free startup: Seat 0 initializes immediately at boot, and Seat 1 automatically lights up with the Plasma Login screen as soon as Seat 0 is ready.
+At boot time, discrete GPUs (dGPU) and integrated GPUs (iGPU) initialize in parallel. Whichever GPU initializes first wins the race and claims `plasma-login-kwin_wayland.service`; the losing seat's greeter helper enters a stalled `ppoll` wait state, leaving its monitor blank.
+
+#### The Solution: Bidirectional Multiseat Supervisor
+To resolve this without requiring SDDM, we provide the **Multiseat Supervisor Daemon** ([`scripts/multiseat-supervisor.sh`](../scripts/multiseat-supervisor.sh)):
+1. Symmetrically monitors `systemd-logind` session states in both directions (`seat0 -> seat1` and `seat1 -> seat0`).
+2. Whichever seat logs in first (or autologs in) transitions to that user's personal session (`user@<uid>.service`), completely freeing `user@959.service`.
+3. Within 2 seconds, the supervisor detects the active user session on the winning seat, terminates the stalled session on the waiting seat, and triggers `org.freedesktop.DisplayManager.Seat.SwitchToGreeter` over system D-Bus.
+4. The waiting seat immediately lights up with its login screen, allowing the second user to authenticate.
+
+#### Installation
+Run the included installer script:
+```bash
+./scripts/install-supervisor.sh
+```
+This installs `/usr/local/bin/multiseat-supervisor` and enables `/etc/systemd/system/multiseat-supervisor.service`.
+
+For full details on the upstream architecture and proposed fixes, see [Upstream Issue Draft](upstream-issue-draft.md).
 
 ---
 
 ## 5. Maintenance & Quick Reset
 
-### Check Seat Status
+### Check Seat & Supervisor Status
 ```bash
 # List all active seats
 loginctl list-seats
@@ -136,8 +147,9 @@ loginctl seat-status seat1
 # View active user sessions
 loginctl list-sessions
 
-# Check supervisor status
-systemctl status multiseat-seat1-supervisor.service
+# Check supervisor daemon status and logs
+systemctl status multiseat-supervisor.service
+journalctl -u multiseat-supervisor.service -t multiseat-supervisor -f
 ```
 
 ### Emergency Reset / Revert to Single-Seat

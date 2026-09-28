@@ -1,0 +1,15 @@
+[Unit]
+Description=Multiseat Supervisor Daemon for Plasma Login Manager
+Documentation=https://github.com/kuasha420/plasma-multiseat-kcm
+After=plasmalogin.service systemd-logind.service
+Wants=plasmalogin.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/multiseat-supervisor
+Restart=always
+RestartSec=3
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

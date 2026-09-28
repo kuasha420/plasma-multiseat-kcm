@@ -14,6 +14,7 @@ Built with **C++20**, **KDE Frameworks 6 (KF6)**, **Qt6**, and **Kirigami**.
 * **USB Topology & Input Mapping**: Displays physical port allocations (e.g. CPU-direct ports vs. Chipset USB Hubs) and attached HID peripherals (keyboards, mice, wireless combo receivers).
 * **Audio Routing Overview**: Displays digital HDMI/DP and analog audio sinks mapped to each workstation.
 * **Udev Rule Inspector**: Live view of persistent hardware assignment rules in `/etc/udev/rules.d/72-seat-*.rules`.
+* **Plasma Login Manager Supervisor**: Included bidirectional background supervisor daemon (`scripts/multiseat-supervisor.sh`) that automates multi-seat login greeter sequencing on KDE Plasma 6 Wayland without requiring SDDM.
 
 ---
 
@@ -71,6 +72,26 @@ You can launch the module directly without opening full System Settings:
 ```bash
 kcmshell6 kcm_multiseat
 ```
+
+---
+
+## Plasma Login Manager Supervisor
+
+When running KDE Plasma 6's native `plasma-login-manager` on Wayland, concurrent multi-seat greeters collide at early boot due to a single-UID `systemd --user` constraint.
+
+We provide a lightweight, zero-dependency supervisor daemon that automatically serializes greeter activations over D-Bus as seats log in.
+
+To install and activate the supervisor:
+```bash
+./scripts/install-supervisor.sh
+```
+
+To view its live operation:
+```bash
+journalctl -u multiseat-supervisor.service -f
+```
+
+For the full architectural analysis and our draft upstream bug report for KDE developers, see [`docs/upstream-issue-draft.md`](docs/upstream-issue-draft.md).
 
 ---
 
