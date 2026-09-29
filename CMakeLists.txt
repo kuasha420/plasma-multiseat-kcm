@@ -30,3 +30,6 @@ target_link_libraries(kcm_multiseat PRIVATE
     KF6::KCMUtilsQuick
     KF6::I18n
 )
+
+install(PROGRAMS scripts/multiseat-ctl DESTINATION ${KDE_INSTALL_BINDIR})
+

@@ -5,9 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "Installing Multiseat Supervisor..."
+echo "Installing Multiseat Supervisor and Control Utility..."
 sudo install -m 755 "$SCRIPT_DIR/multiseat-supervisor.sh" /usr/local/bin/multiseat-supervisor
+sudo install -m 755 "$SCRIPT_DIR/multiseat-ctl" /usr/local/bin/multiseat-ctl
 sudo install -m 644 "$REPO_DIR/systemd/multiseat-supervisor.service" /etc/systemd/system/multiseat-supervisor.service
+
+# Configure sudoers rule so any desktop user on either seat can invoke multiseat-ctl without password prompt
+echo "ALL ALL=(ALL) NOPASSWD: /usr/local/bin/multiseat-ctl" | sudo tee /etc/sudoers.d/multiseat-ctl >/dev/null
+sudo chmod 440 /etc/sudoers.d/multiseat-ctl
 
 # If legacy seat1-specific service exists, stop and disable it
 if systemctl is-active --quiet multiseat-seat1-supervisor.service 2>/dev/null; then

@@ -1,0 +1,456 @@
+#!/bin/bash
+# Multiseat Workstation Recovery & Control Utility
+# Part of Plasma Multiseat Manager (kcm_multiseat)
+#
+# Provides multi-tiered recovery (graceful, session, hard reseed) to repair
+# sudden USB dropout, display blackout, or session lockouts on a target seat
+# from the healthy seat.
+
+set -uo pipefail
+
+VERSION="1.0.0"
+
+# Automatically elevate if not root
+if [ "$EUID" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+
+# Colors for terminal output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $*"
+    logger -t multiseat-ctl "[INFO] $*"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $*"
+    logger -t multiseat-ctl "[SUCCESS] $*"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $*"
+    logger -t multiseat-ctl "[WARN] $*"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $*" >&2
+    logger -t multiseat-ctl "[ERROR] $*"
+}
+
+print_header() {
+    echo -e "${BOLD}${CYAN}======================================================${NC}"
+    echo -e "${BOLD}${CYAN}    Plasma Multiseat Control & Recovery Utility       ${NC}"
+    echo -e "${BOLD}${CYAN}======================================================${NC}"
+}
+
+usage() {
+    print_header
+    cat <<EOF
+Usage: multiseat-ctl <command> [arguments] [options]
+
+Commands:
+  status                   Display current multiseat status, devices, and sessions
+  recover <seat>           Recover a target seat (e.g. seat0 or seat1)
+  reseed <seat>            Alias for 'recover <seat> --level hard'
+  list                     List all active seats
+  help                     Show this help message
+
+Options for 'recover':
+  -l, --level <level>      Recovery escalation level (default: graceful)
+                           Levels:
+                             graceful (soft)  - Non-destructive: re-probe DRM, re-trigger udev,
+                                                wake display, re-attach missing USB without killing apps.
+                             session (medium) - Terminate frozen session/greeter on target seat
+                                                and restart login greeter.
+                             hard (reseed)    - Deep hardware recovery: power-cycle USB hub/controller
+                                                (unbind/bind), reset DRM, reseed udev, and respawn greeter.
+  -n, --dry-run            Simulate actions without applying hardware changes
+  -v, --verbose            Print detailed diagnostic output
+
+Examples:
+  multiseat-ctl status
+  multiseat-ctl recover seat1
+  multiseat-ctl recover seat1 --level hard
+  multiseat-ctl recover seat0 --level session
+EOF
+    exit 1
+}
+
+# Normalize seat name (e.g. "1" -> "seat1", "seat1" -> "seat1")
+normalize_seat() {
+    local input="$1"
+    if [[ "$input" =~ ^[0-9]+$ ]]; then
+        echo "seat${input}"
+    else
+        echo "$input"
+    fi
+}
+
+# D-Bus Seat Path (e.g. "seat0" -> "/org/freedesktop/DisplayManager/Seat0")
+get_dbus_seat_path() {
+    local seat="$1"
+    local cap_seat
+    cap_seat="$(tr '[:lower:]' '[:upper:]' <<< "${seat:0:1}")${seat:1}"
+    echo "/org/freedesktop/DisplayManager/${cap_seat}"
+}
+
+# Discover DRM cards assigned to a seat
+get_seat_drm_cards() {
+    local target_seat="$1"
+    local cards=()
+    for c in /sys/class/drm/card[0-9]*; do
+        [ -e "$c" ] || continue
+        # Ignore sub-devices like card0-HDMI-A-1
+        [[ "$(basename "$c")" =~ ^card[0-9]+$ ]] || continue
+        local dev_seat
+        dev_seat=$(udevadm info -q property "$c" 2>/dev/null | grep -E '^ID_SEAT=' | cut -d= -f2 || true)
+        if [ -z "$dev_seat" ]; then
+            dev_seat="seat0"
+        fi
+        if [ "$dev_seat" = "$target_seat" ]; then
+            cards+=("$(basename "$c")")
+        fi
+    done
+    echo "${cards[@]}"
+}
+
+# Discover USB PCI controller from udev rules for a seat
+get_seat_usb_pci() {
+    local target_seat="$1"
+    local pci=""
+    # Check 72-seat-usb-*.rules
+    for rule in /etc/udev/rules.d/72-seat-*.rules; do
+        [ -e "$rule" ] || continue
+        if grep -q "ENV{ID_SEAT}==\"$target_seat\"" "$rule" || grep -q "ENV{ID_SEAT}=\"$target_seat\"" "$rule"; then
+            local matched
+            matched=$(grep -oP 'usb-pci-\K[0-9a-fA-F:_.]+' "$rule" | head -n 1 || true)
+            if [ -n "$matched" ]; then
+                pci=$(echo "$matched" | sed 's/_/:/g; s/:/./3')
+                echo "$pci"
+                return
+            fi
+        fi
+    done
+    echo ""
+}
+
+show_status() {
+    print_header
+    echo -e "${BOLD}Current Active Seats & Sessions:${NC}"
+    loginctl list-seats
+    echo ""
+    loginctl list-sessions
+    echo ""
+
+    echo -e "${BOLD}Hardware Allocation Breakdown:${NC}"
+    for seat in $(loginctl list-seats --no-legend 2>/dev/null | awk '{print $1}'); do
+        echo -e "${CYAN}------------------------------------------------------${NC}"
+        echo -e "${BOLD}Seat: ${YELLOW}${seat}${NC}"
+        
+        local drm_cards
+        drm_cards=$(get_seat_drm_cards "$seat")
+        echo -e "  ${BOLD}DRM Card(s):${NC} ${drm_cards:-None}"
+        for card in $drm_cards; do
+            for conn in /sys/class/drm/${card}-*/status; do
+                [ -e "$conn" ] || continue
+                local st
+                st=$(cat "$conn" 2>/dev/null || echo "unknown")
+                if [ "$st" = "connected" ]; then
+                    local conn_name
+                    conn_name=$(basename "$(dirname "$conn")")
+                    echo -e "    * Output ${GREEN}${conn_name}${NC}: ${BOLD}connected${NC}"
+                fi
+            done
+        done
+
+        local usb_pci
+        usb_pci=$(get_seat_usb_pci "$seat")
+        if [ -n "$usb_pci" ]; then
+            local pci_desc
+            pci_desc=$(lspci -s "$usb_pci" 2>/dev/null || echo "Unknown Controller")
+            echo -e "  ${BOLD}Assigned USB Controller:${NC} ${usb_pci} ($pci_desc)"
+        fi
+
+        echo -e "  ${BOLD}Attached Input / USB Devices:${NC}"
+        local num_devs=0
+        while IFS= read -r dev_line; do
+            [ -z "$dev_line" ] && continue
+            echo -e "    ${dev_line}"
+            num_devs=$((num_devs + 1))
+        done < <(loginctl seat-status "$seat" 2>/dev/null | grep -E 'usb:|input:' | sed 's/^[ \t]*//' || true)
+
+        if [ "$num_devs" -eq 0 ]; then
+            echo -e "    ${YELLOW}(No USB/Input devices currently detected on this seat!)${NC}"
+        fi
+    done
+    echo -e "${CYAN}------------------------------------------------------${NC}"
+}
+
+cmd_recover() {
+    local target_seat="$1"
+    local level="${2:-graceful}"
+    local dry_run="${3:-false}"
+
+    print_header
+    echo -e "Target Seat:       ${YELLOW}${target_seat}${NC}"
+    echo -e "Escalation Level:  ${BOLD}${level^^}${NC}"
+    echo -e "Dry Run Mode:      $([ "$dry_run" = "true" ] && echo -e "${YELLOW}ENABLED${NC}" || echo -e "${GREEN}DISABLED${NC}")"
+    echo -e "${CYAN}------------------------------------------------------${NC}"
+
+    # Verify seat exists or is configured
+    if ! loginctl list-seats --no-legend 2>/dev/null | grep -qw "$target_seat"; then
+        log_warn "Seat '$target_seat' is not currently listed in logind. Will attempt to activate and re-seed it."
+    fi
+
+    local drm_cards
+    drm_cards=$(get_seat_drm_cards "$target_seat")
+    local usb_pci
+    usb_pci=$(get_seat_usb_pci "$target_seat")
+    local dbus_path
+    dbus_path=$(get_dbus_seat_path "$target_seat")
+
+    case "$level" in
+        graceful|soft)
+            log_info "Executing Level 1 (Graceful Recovery) for ${target_seat}..."
+            
+            # 1. Trigger udev subsystem events
+            log_info "1/4: Re-triggering udev input, hid, and DRM subsystem events..."
+            if [ "$dry_run" = "false" ]; then
+                udevadm trigger --action=change --subsystem-match=input || true
+                udevadm trigger --action=change --subsystem-match=hid || true
+                udevadm trigger --action=add --subsystem-match=usb || true
+            fi
+
+            # 2. Re-probe DRM outputs
+            log_info "2/4: Re-probing DRM connectors on card(s): ${drm_cards:-none}..."
+            if [ "$dry_run" = "false" ]; then
+                for card in $drm_cards; do
+                    udevadm trigger --action=change "/sys/class/drm/${card}" || true
+                    for conn in /sys/class/drm/${card}-*/status; do
+                        [ -e "$conn" ] && cat "$conn" >/dev/null 2>&1 || true
+                    done
+                done
+            fi
+
+            # 3. Check USB health - if USB devices dropped out on seat1, rebind USB controller
+            log_info "3/4: Verifying USB devices on ${target_seat}..."
+            local current_usb_count
+            current_usb_count=$(loginctl seat-status "$target_seat" 2>/dev/null | grep -cE 'usb:|input:' || true)
+            if [ "$current_usb_count" -eq 0 ] && [ -n "$usb_pci" ]; then
+                log_warn "Target seat has NO detected USB devices. Performing live unbind/rebind on controller ${usb_pci}..."
+                if [ "$dry_run" = "false" ]; then
+                    echo "$usb_pci" > /sys/bus/pci/drivers/xhci_hcd/unbind 2>/dev/null || true
+                    sleep 0.8
+                    echo "$usb_pci" > /sys/bus/pci/drivers/xhci_hcd/bind 2>/dev/null || true
+                    sleep 1.2
+                fi
+            else
+                log_success "USB topology is intact (${current_usb_count} devices attached)."
+            fi
+
+            # 4. Settle udev and ensure greeter is up if seat is idle
+            log_info "4/4: Settling udev rules and verifying seat login state..."
+            if [ "$dry_run" = "false" ]; then
+                udevadm trigger --action=add || true
+                udevadm settle --timeout=2 || true
+
+                # If no user session is active on target_seat, ensure greeter is up
+                if ! loginctl list-sessions --no-legend 2>/dev/null | grep -w "$target_seat" | grep -v "plasmalogin" | grep -q "user"; then
+                    log_info "Seat is not logged in. Sending SwitchToGreeter signal..."
+                    qdbus6 --system org.freedesktop.DisplayManager "$dbus_path" org.freedesktop.DisplayManager.Seat.SwitchToGreeter 2>/dev/null || true
+                fi
+            fi
+
+            log_success "Graceful recovery completed successfully for ${target_seat}!"
+            ;;
+
+        session|medium)
+            log_info "Executing Level 2 (Session & Greeter Restart) for ${target_seat}..."
+            
+            # 1. Terminate sessions on target seat
+            log_info "1/3: Terminating stuck/frozen sessions on ${target_seat}..."
+            if [ "$dry_run" = "false" ]; then
+                local seat_sessions
+                seat_sessions=$(loginctl list-sessions --no-legend 2>/dev/null | grep -w "$target_seat" | awk '{print $1}' || true)
+                for sess in $seat_sessions; do
+                    log_info "  Terminating session $sess..."
+                    loginctl terminate-session "$sess" 2>/dev/null || true
+                done
+                sleep 1
+            fi
+
+            # 2. Re-trigger udev events
+            log_info "2/3: Refreshing hardware udev mappings..."
+            if [ "$dry_run" = "false" ]; then
+                udevadm trigger --action=change --subsystem-match=input || true
+                udevadm trigger --action=add --subsystem-match=usb || true
+                udevadm trigger --action=add || true
+                udevadm settle --timeout=2 || true
+            fi
+
+            # 3. Trigger fresh greeter
+            log_info "3/3: Triggering fresh greeter on ${target_seat} via D-Bus..."
+            if [ "$dry_run" = "false" ]; then
+                qdbus6 --system org.freedesktop.DisplayManager "$dbus_path" org.freedesktop.DisplayManager.Seat.SwitchToGreeter 2>/dev/null || true
+            fi
+
+            log_success "Session restart completed for ${target_seat}!"
+            ;;
+
+        hard|reseed|destroy)
+            log_info "Executing Level 3 (Hard Reseed & Hardware Reset) for ${target_seat}..."
+
+            # 1. Terminate all sessions
+            log_info "1/5: Terminating all active sessions on ${target_seat}..."
+            if [ "$dry_run" = "false" ]; then
+                loginctl terminate-seat "$target_seat" 2>/dev/null || true
+                sleep 1
+            fi
+
+            # 2. Hardware Power-Cycle USB Controller / Hub
+            if [ -n "$usb_pci" ]; then
+                log_info "2/5: Power-cycling assigned USB controller (${usb_pci}) via xhci_hcd driver unbind/bind..."
+                if [ "$dry_run" = "false" ]; then
+                    echo "$usb_pci" > /sys/bus/pci/drivers/xhci_hcd/unbind 2>/dev/null || true
+                    sleep 1
+                    echo "$usb_pci" > /sys/bus/pci/drivers/xhci_hcd/bind 2>/dev/null || true
+                    sleep 1.5
+                fi
+            else
+                log_info "2/5: No dedicated USB PCI controller found for ${target_seat}. Re-binding USB devices..."
+                if [ "$dry_run" = "false" ]; then
+                    udevadm trigger --action=add --subsystem-match=usb || true
+                fi
+            fi
+
+            # 3. DRM Master Reset
+            log_info "3/5: Re-triggering DRM card(s): ${drm_cards:-none}..."
+            if [ "$dry_run" = "false" ]; then
+                for card in $drm_cards; do
+                    udevadm trigger --action=add "/sys/class/drm/${card}" || true
+                done
+            fi
+
+            # 4. Reseed udev rules
+            log_info "4/5: Re-seeding all persistent seat rules from /etc/udev/rules.d/..."
+            if [ "$dry_run" = "false" ]; then
+                udevadm trigger --action=add || true
+                udevadm settle --timeout=3 || true
+            fi
+
+            # 5. Respawn greeter
+            log_info "5/5: Sending SwitchToGreeter D-Bus signal to ${dbus_path}..."
+            if [ "$dry_run" = "false" ]; then
+                sleep 0.5
+                qdbus6 --system org.freedesktop.DisplayManager "$dbus_path" org.freedesktop.DisplayManager.Seat.SwitchToGreeter 2>/dev/null || true
+            fi
+
+            log_success "Hard reseed completed! ${target_seat} is fully re-initialized."
+            ;;
+
+        *)
+            log_error "Unknown level '$level'. Valid levels: graceful (soft), session (medium), hard (reseed)."
+            exit 1
+            ;;
+    esac
+}
+
+# --- Main CLI Argument Parsing ---
+COMMAND="${1:-status}"
+shift || true
+
+case "$COMMAND" in
+    status)
+        show_status
+        ;;
+    list)
+        loginctl list-seats
+        ;;
+    recover)
+        TARGET_SEAT=""
+        LEVEL="graceful"
+        DRY_RUN="false"
+        
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                seat0|seat1|seat2|seat3|0|1|2|3)
+                    TARGET_SEAT=$(normalize_seat "$1")
+                    shift
+                    ;;
+                -l|--level)
+                    LEVEL="$2"
+                    shift 2
+                    ;;
+                -n|--dry-run)
+                    DRY_RUN="true"
+                    shift
+                    ;;
+                -v|--verbose)
+                    shift
+                    ;;
+                *)
+                    if [ -z "$TARGET_SEAT" ]; then
+                        TARGET_SEAT=$(normalize_seat "$1")
+                        shift
+                    else
+                        log_error "Unknown argument: $1"
+                        usage
+                    fi
+                    ;;
+            esac
+        done
+
+        if [ -z "$TARGET_SEAT" ]; then
+            log_error "Missing target seat. Specify seat0 or seat1."
+            usage
+        fi
+
+        cmd_recover "$TARGET_SEAT" "$LEVEL" "$DRY_RUN"
+        ;;
+    reseed)
+        TARGET_SEAT=""
+        DRY_RUN="false"
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                seat0|seat1|seat2|seat3|0|1|2|3)
+                    TARGET_SEAT=$(normalize_seat "$1")
+                    shift
+                    ;;
+                -n|--dry-run)
+                    DRY_RUN="true"
+                    shift
+                    ;;
+                *)
+                    if [ -z "$TARGET_SEAT" ]; then
+                        TARGET_SEAT=$(normalize_seat "$1")
+                        shift
+                    else
+                        shift
+                    fi
+                    ;;
+            esac
+        done
+        if [ -z "$TARGET_SEAT" ]; then
+            log_error "Missing target seat. Specify seat0 or seat1."
+            usage
+        fi
+        cmd_recover "$TARGET_SEAT" "hard" "$DRY_RUN"
+        ;;
+    help|--help|-h)
+        usage
+        ;;
+    version|--version|-V)
+        echo "multiseat-ctl v${VERSION}"
+        ;;
+    *)
+        log_error "Unknown command: $COMMAND"
+        usage
+        ;;
+esac

@@ -88,6 +88,18 @@ Kirigami.ScrollablePage {
             }
         }
 
+        // Recovery Status Notification
+        Kirigami.InlineMessage {
+            id: recoveryStatusMsg
+            Layout.fillWidth: true
+            type: kcm.lastRecoveryMessage.includes("failed") || kcm.lastRecoveryMessage.includes("timed out")
+                  ? Kirigami.MessageType.Error
+                  : Kirigami.MessageType.Positive
+            visible: kcm.lastRecoveryMessage.length > 0
+            text: kcm.lastRecoveryMessage
+            showCloseButton: true
+        }
+
         // 2. Individual Seat Cards (Unified Full-Width Property Sections)
         Repeater {
             model: kcm.seats
@@ -324,6 +336,80 @@ Kirigami.ScrollablePage {
                         text: modelData.audioSink
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                    }
+
+                    // --- SECTION 4: Station Recovery & Actions ---
+                    RowLayout {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        Layout.topMargin: Kirigami.Units.smallSpacing / 2
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Kirigami.Icon {
+                            source: "tools-wizard"
+                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                            implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                        }
+                        Kirigami.Heading {
+                            text: i18n("Hardware Recovery & Reset")
+                            level: 4
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    Kirigami.Separator {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing / 2
+                    }
+
+                    QQC2.Label {
+                        text: i18n("Station Repair:")
+                        font.bold: true
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 7.5
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
+                        horizontalAlignment: Text.AlignRight
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        QQC2.Button {
+                            text: i18n("Soft Refresh")
+                            icon.name: "view-refresh"
+                            enabled: !kcm.isRecovering
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: i18n("Non-destructive: re-probe DRM, wake displays, and re-attach dropped USB devices without closing apps.")
+                            onClicked: kcm.recoverSeat(modelData.name, "graceful")
+                        }
+
+                        QQC2.Button {
+                            text: i18n("Restart Session")
+                            icon.name: "system-reboot"
+                            enabled: !kcm.isRecovering
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: i18n("Terminate frozen session/greeter on this seat and respawn fresh login screen.")
+                            onClicked: kcm.recoverSeat(modelData.name, "session")
+                        }
+
+                        QQC2.Button {
+                            text: i18n("Hard Reseed")
+                            icon.name: "dialog-warning"
+                            enabled: !kcm.isRecovering
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: i18n("Deep hardware reset: power-cycle USB controller/hub, reseed udev rules, reset DRM, and respawn greeter.")
+                            onClicked: kcm.recoverSeat(modelData.name, "hard")
+                        }
+
+                        QQC2.BusyIndicator {
+                            running: kcm.isRecovering
+                            visible: kcm.isRecovering
+                            implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                        }
                     }
                 }
             }

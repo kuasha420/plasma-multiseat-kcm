@@ -160,3 +160,46 @@ sudo udevadm trigger
 ```
 This wipes all custom seat rules and immediately merges all displays and USB ports back to `seat0`.
 
+---
+
+## 6. Workstation Recovery & Reseeding (`multiseat-ctl`)
+
+When operating a multi-user, multi-GPU workstation, occasional hardware or compositor issues can occur on one seat (e.g. sudden USB peripheral dropout, monitor blackout / DPMS sleep, or frozen compositor). 
+
+The included utility **`multiseat-ctl`** (also accessible directly from the KDE System Settings module on both seats) enables a user at the healthy workstation to diagnose and repair the troubled workstation without rebooting the system or affecting the healthy seat.
+
+### Three-Tier Escalation Architecture
+
+| Level | Flag | Impact on User Apps | Target Problem & Mechanism |
+|---|---|---|---|
+| **Tier 1: Graceful** | `--level graceful` | **Zero** (Apps keep running) | **USB dropout, display blackout, or DPMS stall.** Re-probes DRM connectors to force AMDGPU monitor wakeup, triggers udev subsystem events (`input`, `hid`, `drm`), and automatically re-binds missing USB devices without terminating the user session. |
+| **Tier 2: Session** | `--level session` | **Kills apps on target seat only** | **Frozen desktop session or stalled greeter.** Terminates stuck sessions specifically on the target seat (`loginctl terminate-session`), refreshes hardware udev maps, and signals `SwitchToGreeter` over D-Bus to respawn a clean login screen. |
+| **Tier 3: Hard Reseed** | `--level hard` | **Full hardware reset of target seat** | **Dead USB hub chip, kernel controller lockup, or hard lockout.** Terminates all sessions on the target seat, physically power-cycles the assigned USB controller/hub (via `xhci_hcd` driver `unbind` $\rightarrow$ `bind`), resets the DRM card node, re-seeds udev rules, and respawns the greeter. |
+
+### CLI Usage
+
+```bash
+# Check full system status, assigned DRM cards, and USB topology
+multiseat-ctl status
+
+# Non-destructive soft refresh on seat1 (wakes display & recovers dropped USB)
+multiseat-ctl recover seat1
+
+# Restart stuck session or login screen on seat1
+multiseat-ctl recover seat1 --level session
+
+# Full hardware power-cycle and reseed of seat1 (alias: multiseat-ctl reseed seat1)
+multiseat-ctl recover seat1 --level hard
+
+# Recover seat0 from seat1
+multiseat-ctl recover seat0 --level graceful
+
+# Dry run simulation
+multiseat-ctl recover seat1 --level hard --dry-run
+```
+
+### Graphical Integration (System Settings)
+
+Each seat card in **KDE System Settings $\rightarrow$ Multiseat** includes dedicated one-click repair buttons (**Soft Refresh**, **Restart Session**, **Hard Reseed**) with real-time feedback and execution indicators. Users on either seat can repair the other seat instantly.
+
+

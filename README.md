@@ -15,6 +15,7 @@ Built with **C++20**, **KDE Frameworks 6 (KF6)**, **Qt6**, and **Kirigami**.
 * **Audio Routing Overview**: Displays digital HDMI/DP and analog audio sinks mapped to each workstation.
 * **Udev Rule Inspector**: Live view of persistent hardware assignment rules in `/etc/udev/rules.d/72-seat-*.rules`.
 * **Plasma Login Manager Supervisor**: Included bidirectional background supervisor daemon (`scripts/multiseat-supervisor.sh`) that automates multi-seat login greeter sequencing on KDE Plasma 6 Wayland without requiring SDDM.
+* **Multi-Tier Seat Recovery & Reseeding**: CLI tool (`multiseat-ctl`) and native one-click KCM repair buttons to fix USB dropouts, monitor blackouts, or frozen sessions on either workstation from the healthy workstation without rebooting.
 
 ---
 
@@ -92,6 +93,28 @@ journalctl -u multiseat-supervisor.service -f
 ```
 
 For the full architectural analysis and our draft upstream bug report for KDE developers, see [`docs/upstream-issue.md`](docs/upstream-issue.md).
+
+---
+
+## Seat Recovery & Reseeding (`multiseat-ctl`)
+
+To resolve sudden USB dropouts, blacked-out displays, or frozen sessions on either workstation without rebooting the system:
+
+```bash
+# Check status and assigned hardware
+multiseat-ctl status
+
+# Non-destructive recovery (wakes monitor & recovers dropped USB without closing apps)
+multiseat-ctl recover seat1
+
+# Restart stuck session or greeter
+multiseat-ctl recover seat1 --level session
+
+# Full hardware power-cycle (unbind/bind USB hub, reset DRM, reseed udev)
+multiseat-ctl recover seat1 --level hard
+```
+
+These actions can also be triggered directly from the **Hardware Recovery & Reset** buttons inside KDE System Settings on either seat.
 
 ---
 

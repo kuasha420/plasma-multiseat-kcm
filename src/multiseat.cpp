@@ -356,4 +356,46 @@ void KCMultiseat::collectRulesData()
     Q_EMIT rulesChanged();
 }
 
+void KCMultiseat::recoverSeat(const QString &seatName, const QString &level)
+{
+    m_isRecovering = true;
+    Q_EMIT isRecoveringChanged();
+
+    m_lastRecoveryMessage = QStringLiteral("Executing %1 recovery on %2...").arg(level, seatName);
+    Q_EMIT lastRecoveryMessageChanged();
+
+    QProcess proc;
+    QStringList args = {
+        QStringLiteral("-n"),
+        QStringLiteral("/usr/local/bin/multiseat-ctl"),
+        QStringLiteral("recover"),
+        seatName,
+        QStringLiteral("--level"),
+        level
+    };
+
+    proc.start(QStringLiteral("sudo"), args);
+    if (!proc.waitForFinished(15000)) {
+        proc.kill();
+        m_lastRecoveryMessage = QStringLiteral("Recovery action timed out for %1").arg(seatName);
+    } else {
+        QString out = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+        QString err = QString::fromUtf8(proc.readAllStandardError()).trimmed();
+        if (proc.exitCode() == 0) {
+            m_lastRecoveryMessage = QStringLiteral("Recovery (%1) succeeded for %2.").arg(level, seatName);
+        } else {
+            m_lastRecoveryMessage = QStringLiteral("Recovery failed (%1): %2").arg(QString::number(proc.exitCode()), err.isEmpty() ? out : err);
+        }
+    }
+    Q_EMIT lastRecoveryMessageChanged();
+
+    collectSeatData();
+    collectRulesData();
+    Q_EMIT seatsChanged();
+    Q_EMIT rulesChanged();
+
+    m_isRecovering = false;
+    Q_EMIT isRecoveringChanged();
+}
+
 #include "multiseat.moc"
