@@ -283,6 +283,11 @@ cmd_recover() {
                     log_info "  Terminating session $sess..."
                     loginctl terminate-session "$sess" 2>/dev/null || true
                 done
+                # If target seat had a plasmalogin greeter, flush user@959 units to prevent placeholder screen reuse
+                if sudo -u plasmalogin XDG_RUNTIME_DIR=/run/user/959 systemctl --user is-active --quiet plasma-login-kwin_wayland.service 2>/dev/null; then
+                    log_info "  Flushing user@959 greeter compositor to clear placeholder screen..."
+                    sudo -u plasmalogin XDG_RUNTIME_DIR=/run/user/959 systemctl --user stop plasma-login-wayland.target plasma-login-kwin_wayland.service plasma-login.service 2>/dev/null || true
+                fi
                 sleep 1
             fi
 
@@ -311,6 +316,8 @@ cmd_recover() {
             log_info "1/5: Terminating all active sessions on ${target_seat}..."
             if [ "$dry_run" = "false" ]; then
                 loginctl terminate-seat "$target_seat" 2>/dev/null || true
+                # Flush user@959 units as well
+                sudo -u plasmalogin XDG_RUNTIME_DIR=/run/user/959 systemctl --user stop plasma-login-wayland.target plasma-login-kwin_wayland.service plasma-login.service 2>/dev/null || true
                 sleep 1
             fi
 
